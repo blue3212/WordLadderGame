@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<style>
+#background
+{
+  background-color: lightslategrey;
+}
+.header
+{
+  font-size: 40px;
+  text-align: center;
+}
+#errormessage
+{
+  color: red;
+}
+#gamewindow
+{
+  width: 50vw;
+  height: 50vh;
+  border: 15px solid green;
+  padding: 50px;
+  margin: 20px;
+  position: relative;
+  top: 50%;
+  left: 20%;
+  background-color: lightblue;
+}
+#frame1
+{
+  font-family:Arial, Helvetica, sans-serif;
+  font-size: 40px;
+  text-align: center;
+  text-justify: center;   
+}
+#startButton
+{
+  cursor: pointer;
+}
+#frame2
+{
+  display: none;
+}
+#frame3
+{
+  display: none;
+  word-break:keep-all;
+
+}
+.oneLine
+{
+  display: inline;
+}
+
+</style>
+
+<html id = "background">
+    <title>
+        Wordladder
+    </title>
+    <h1 class = "header">
+        Wordladder
+    </h1>
+    <div id = "gamewindow">
+        <div id = "frame1">
+          <p id = "startButton" onclick="replaceFrame('frame1','frame2')">Start Wordladder</p>
+        </div>
+        <div id = "frame2">
+            <p>Insert your starting and ending words. They must be of the same length and more than 1 letter apart.</p>
+            <form id = "wordForm" onsubmit = "frame2Function(['beginWord','endWord'])">
+                <label for="beginWord">Starting Word:</label><br>
+                <input type="text" id="beginWord" name="beginWord"><br>
+                <label for="endWord">Ending Word:</label><br>
+                <input type="text" id="endWord" name="endWord"><br>
+                <input id = "wordSubmit" type="submit" value="Submit">
+                <p id = "errormessage"></p>
+            </form>
+        </div>
+        <div id = "frame3">
+          <h3 class = "oneLine" id = "wordList"></h3>
+          <form id = "finalForm" class = "oneLine" onsubmit="frame3Function()">
+            <wbr>
+            <input  id = "currentWord">
+            <button formtarget = "finalForm" id = "currentWordSub" type ="submit">Add Word</button>
+            <button id = "removeWordBut" type = "button">Remove Previous Word</button>
+          </form>
+          <h3 class = "oneLine" id = "arrowEndWord"></h3>
+        </div>
+    </div>
+</html>
+
+<script>
+document.getElementById("wordForm").addEventListener("submit",(event) => {event.preventDefault();})
+document.getElementById("finalForm").addEventListener("submit",(event) => {event.preventDefault();})
+// Removes the last word and arrow from wordList unless there is only the begining word.
+document.getElementById("removeWordBut").addEventListener("click",() => 
+{
+  var str = document.getElementById("wordList").innerHTML;
+  str = str.substr(0,str.length - 6);
+  if(str.lastIndexOf("→<wbr>") == -1)
+  {
+    return;
+  }
+  str = str.substr(0,str.lastIndexOf("→<wbr>")+6);
+  document.getElementById("wordList").innerHTML = str;
+})
+// Replaces a frame with another using an animation
+// (Input is the frame names as strings)
+async function replaceFrame(hide,reveal)
+{   
+  let opa = 1;
+  let hideDoc = document.getElementById(hide);
+  let revealDoc = document.getElementById(reveal);
+  let promise = new Promise((resolve)=>
+  {
+    let it1 = setInterval(() => 
+    {
+        if(opa <= 0)
+        {
+          resolve("");
+          clearInterval(it1);
+        }
+        opa -= 0.01;
+        hideDoc.style.opacity = opa;
+    }, 10);
+  })
+  await promise;
+  hideDoc.style.display = "none";
+  setTimeout(() => 
+  {
+    revealDoc.style.display = "block";    
+  }, 0.09); 
+  let it3 = setInterval(() => 
+  {
+      if(opa >= 1)
+      {
+          clearInterval(it3);
+      }
+      opa += 0.01;
+      revealDoc.style.opacity = opa;
+  }, 10);
+};
+// Performs a call to the serverside google script.
+// This is asynchronous and will return a promise.
+async function checkWords(arr1)
+{
+  var promise = new Promise((resolve)=>
+  {
+    google.script.run.withSuccessHandler(
+      function(bools) {resolve(bools)}
+    ).findWord(arr1)
+  })
+  return promise;
+}
+
+// Will check if the inputed values are the same length,
+// at least 2 characters apart, and are real words.
+// Proper error messages will be shown depending on the issue.
+// If there is no issue, frame2 will be replaced by frame3.
+async function frame2Function(arr)
+{
+  document.getElementById("errormessage").style.display = "none";
+  var input1 = document.getElementById(arr[0]).value;
+  var input2 = document.getElementById(arr[1]).value;
+  input1 = (input1.trim()).toLowerCase();
+  input2 = (input2.trim()).toLowerCase();
+  if(wordAdjacent(input1,input2) || input1 == input2)
+  {
+    document.getElementById("errormessage").innerHTML = "The inputted words are not more than 1 character apart!";
+    document.getElementById("errormessage").style.display = "block";
+    return;
+  }
+  if(input1.length != input2.length)
+  {
+    document.getElementById("errormessage").innerHTML = "The inputted words are not of equal length!";
+    document.getElementById("errormessage").style.display = "block";
+    return;
+  }
+  var arr1 = [input1,input2];
+  document.getElementById("background").style.cursor = "progress";
+  var bools = await checkWords(arr1);
+  document.getElementById("background").style.cursor = "auto";
+  let errorstr = "";
+  if(bools[0] == false)
+  {
+    errorstr += "The inputted begining word is not a real word!<br>"
+  }
+  if(bools[1] == false)
+  {
+    errorstr += "The inputted ending word is not a real word!<br>"
+  }
+  if(errorstr.length != 0)
+  {
+    document.getElementById("errormessage").innerHTML = errorstr;
+    document.getElementById("errormessage").style.display = "block";
+  }
+  else
+  {
+    replaceFrame("frame2","frame3");
+    document.getElementById("wordList").innerHTML = input1 + "&rarr;<wbr>";
+    document.getElementById("currentWord").maxLength = input1.length;
+    document.getElementById("currentWord").size = input1.length;
+    document.getElementById("arrowEndWord").innerHTML = "&#8674;<wbr>" + input2;
+  }
+}
+// Checks if the inputted word is the correct length, is adjacent to the previous word,
+// and is a real word. The proper error message is also given.
+// If there is no issue, the word is added to the wordladder and the word being added is
+// checked if it it adjacent to the final word. If it is, the wordladder is complete.
+async function frame3Function()
+{
+  let prevWord = document.getElementById("wordList").innerHTML;
+  prevWord = prevWord.substring(0,prevWord.lastIndexOf("→<wbr>"));
+  if(prevWord.lastIndexOf("→<wbr>") != -1)
+  {
+    prevWord = prevWord.substring(prevWord.lastIndexOf("→<wbr>")+6,prevWord.length);
+  }
+  wordVal = document.getElementById("currentWord").value;
+  document.getElementById("currentWord").value = "";
+  wordVal = wordVal.toLowerCase()
+  if(wordVal.length != document.getElementById("currentWord").size)
+  {
+    alert("The inputted word is not " + document.getElementById("currentWord").size + " characters long!")
+    return;
+  }
+  if(!wordAdjacent(wordVal,prevWord))
+  {
+    alert("The inputted word and previous word are not 1 character apart!");
+    return;
+  }
+  var arr = [];
+  arr.push(wordVal);
+  document.getElementById("background").style.cursor = "progress";
+  var bools = await checkWords(arr);
+  document.getElementById("background").style.cursor = "auto";
+  var finalWord = document.getElementById("arrowEndWord").innerHTML;
+  finalWord = finalWord.substring(6,finalWord.length);
+  if(wordAdjacent(wordVal,finalWord))
+  {
+    document.getElementById("arrowEndWord").innerHTML = "&rarr;<wbr>" + finalWord + "<br> You have completed a wordladder!";
+    document.getElementById("wordList").innerHTML += wordVal;
+    document.getElementById("finalForm").style.display = "none";
+    return
+  }
+  if(bools[0])
+  {
+    document.getElementById("wordList").innerHTML += wordVal + "&rarr;<wbr>";
+  }
+  else
+  {
+    alert("The inputted word is not a real word!")
+  }
+
+}
+// Returns a boolean indicating if
+// the given words are exactly 1 character apart.
+// Prereq: word1 and word2 are the same length.
+function wordAdjacent(word1,word2)
+{
+  var misMatch = 0;
+  for(let i = 0; i < word1.length; ++i)
+  {
+    if(word1[i] != word2[i])
+    {
+      misMatch++;
+    }
+  }
+  return (misMatch == 1);
+}
+</script>
